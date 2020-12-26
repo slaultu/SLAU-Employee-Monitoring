@@ -14,7 +14,7 @@ Run install.bat
 Check for csv files and screenshoots after reboot in script folder.
 
 ## Functions
-+ [+] Log open windows and titles
++ [x] Log open windows and titles
 + [x] Autorun on user login
 + [x] Log time on window
 + [x] Take screenshoots on window change
