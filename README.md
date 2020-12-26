@@ -1,4 +1,4 @@
-# FREE Personal monitoring powershell script
+# FREE user time activity monitoring powershell script
 Comprehensive Windows user tracking functionality can capture any user activity. These can range from screen recordings, tracking emails, and all the way to Zoom sessions.
 Employee monitoring software provides reports on employee productivity. Monitoring reports show a real picture of how employees use the computer.
 * Increased Transparency
