@@ -14,10 +14,10 @@ Run install.bat
 Check for csv files and screenshoots after reboot in script folder.
 
 ## Functions
-+ [x] Log open windows and titles
-+ [x] Autorun on user login
-+ [x] Log time on window
-+ [x] Take screenshoots on window change
++ :white_check_mark: Log open windows and titles
++ :white_check_mark: Autorun on user login
++ :white_check_mark: Log time on window
++ :white_check_mark: Take screenshoots on window change
 
 ## ToDo
 - [x] Alerting via SMTP (email), when malciuos activity detected. Visting bad rating websites or software.
