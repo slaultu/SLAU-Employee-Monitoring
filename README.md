@@ -15,8 +15,11 @@ Check for csv files and screenshoots after reboot in script folder.
 
 ## Functions
 :white_check_mark: Log open windows and titles
+
 :white_check_mark: Autorun on user login
+
 :white_check_mark: Log time on window
+
 :white_check_mark: Take screenshoots on window change
 
 ## In Progress
@@ -24,10 +27,15 @@ Check for csv files and screenshoots after reboot in script folder.
 
 ## ToDo
 :black_square_button: Alerting via SMTP (email), when malciuos activity detected. Visting bad rating websites or software.
+
 :writing_hand: Log idle time in window
+
 :black_square_button: Colected data upload mechanism
+
 :black_square_button: Web for uploading colected data
+
 :black_square_button: Web for analysis of colected data
+
 :black_square_button: Web dashboard to show calculated employee productivity level based on different metrics recorded by the software.
 
 ## Contributing
