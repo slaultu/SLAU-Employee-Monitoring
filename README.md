@@ -20,6 +20,7 @@ Check for csv files and screenshoots after reboot in script folder.
 + [x] Take screenshoots on window change
 
 ## ToDo
+- [x] Alerting via SMTP (email), when malciuos activity detected. Visting bad rating websites or software.
 - [x] Log idle time in window
 - [x] Colected data upload mechanism
 - [x] Web for uploading colected data
