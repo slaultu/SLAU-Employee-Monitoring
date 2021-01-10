@@ -22,12 +22,64 @@ $global:last_screenshot = (Get-Date)
 $global:idle_screenshoot_interval = 5 #minutes
 $global:loop_intensinty_seconds = 10 #seconds. Decreing will react more quicker to windows change but increase CPU usage.
 $global:screenshoot_wait_new_window = 5 #seconds. How many seconds wait before screenshot after windows change.
+$global:max_idle_time = 2 #max time (minutes) user can be in idel to start counting as inactive/unproductive time
 
 [Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing") 
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms") 
 
-Write-Output "1"
+$global:last_user_idle = 0
+$global:total_user_idle = 0
+
+
+
+Add-Type @'
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+namespace PInvoke.Win32 {
+
+    public static class UserInput {
+
+        [DllImport("user32.dll", SetLastError=false)]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO {
+            public uint cbSize;
+            public int dwTime;
+        }
+
+        public static DateTime LastInput {
+            get {
+                DateTime bootTime = DateTime.UtcNow.AddMilliseconds(-Environment.TickCount);
+                DateTime lastInput = bootTime.AddMilliseconds(LastInputTicks);
+                return lastInput;
+            }
+        }
+
+        public static TimeSpan IdleTime {
+            get {
+                return DateTime.UtcNow.Subtract(LastInput);
+            }
+        }
+
+        public static int LastInputTicks {
+            get {
+                LASTINPUTINFO lii = new LASTINPUTINFO();
+                lii.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+                GetLastInputInfo(ref lii);
+                return lii.dwTime;
+            }
+        }
+    }
+}
+'@
+
+
+
+
 
 Function Get-ForegroundWindowProcess {
 
@@ -156,160 +208,153 @@ Switch ($PSCmdlet.ParameterSetName) {
 
 } #switch
 
+
 #define the entire command as a scriptblock so it can be run as a job if necessary
 $main = {
-Param($sb)
+    Param($sb)
 
-if (-Not ($sb -is [scriptblock])) {
- #convert $sb to a scriptblock
- Write-Output "Creating sb from $sb"
- $sb = [scriptblock]::Create("$sb")
-}
-
-#create a hashtable
-$hash=@{}
-
-#create a collection of objects
-$objs = @()
-
-New-Variable -Name LastApp -Value $Null
-
-while( -Not (&$sb) ) {
-
-    $Process = Get-ForegroundWindowProcess
-
-     [string]$app = $process.MainWindowTitle 
-
-     if ( (-Not $app) -AND $process.MainModule.Description ) {
-        #if no title but there is a description, use that
-        $app = $process.MainModule.Description
-     }
-     elseif (-Not $app) {
-        #otherwise use the module name
-        $app = $process.mainmodule.modulename
-     }
-      
-    if ($process -AND (($Process.MainWindowHandle -ne $LastProcess.MainWindowHandle) -OR ($app -ne $lastApp )) ) {
-        Write-Output "[$(Get-Date)] NEW App changed to $app"
-        
-         #record $last
-         if ($LastApp) {
-          if ($objs.WindowTitle -contains $LastApp) {
-              #update same app that was previously found
-              Write-Output "[$(Get-Date)] updating existing object $LastApp"
-              $existing = $objs | where { $_.WindowTitle -eq $LastApp } 
-              
-              Write-Output "[$(Get-Date)] SW = $($sw.elapsed)"
-              
-              $existing.Time+= $sw.Elapsed
-
-              #include a detail property object
-               
-              $existing.Detail += [pscustomObject]@{
-                StartTime = $start
-                EndTime = Get-Date
-                ProcessID = $lastProcess.ID
-                Process = if ($LastProcess) {$LastProcess} else {$process}
-               }
-              Write-Output "[$(Get-Date)] Total time = $($existing.time)"
-              
-
-             } else {
-                #create new object
-
-                #include a detail property object
-                [pscustomObject]$detail=@{
-                  StartTime = $start
-                  EndTime = Get-Date
-                  ProcessID = $lastProcess.ID
-                  Process = if ($LastProcess) {$LastProcess} else {$process}
-                }
-                Write-Output "[$(Get-Date)] Creating new object for $LastApp"
-                Write-Output "[$(Get-Date)] Time = $($sw.elapsed)"
-                
-                $obj = New-Object -TypeName PSobject -Property @{
-                    WindowTitle = $LastApp
-                    Application = $LastMainModule.Description #$LastProcess.MainModule.Description
-                    Product = $LastMainModule.Product #$LastProcess.MainModule.Product
-                    Time = $sw.Elapsed
-                    Date = (get-date).ToString(‘yyyy-MM-dd’)
-                    User = $env:UserName
-                    Detail = ,([pscustomObject]@{
-                     StartTime = $start
-                     EndTime = Get-Date
-                     ProcessID = $lastProcess.ID
-                     Process = if ($LastProcess) {$LastProcess} else {$process}
-                    } )
-					StartTime = $start
-                    EndTime = Get-Date
-                    Process = if ($LastProcess) {$LastProcess} else {$process}                   
-					}    
-
-                $obj.psobject.TypeNames.Insert(0,"My.Monitored.Window")
-                #add a custom type name
-
-                #add the object to the collection
-                $objs += $obj
-                $obj | Select-Object -Property User, Date, StartTime, EndTime, Time, Application, WindowTitle, Product, Title, Process | Export-CSV $global:dir\Data_$env:UserName.csv -Append -NoTypeInformation -Encoding utf8
-                Write-Output "[$(Get-Date)] Sleeping $global:screenshoot_wait_new_window s...."
-                Start-Sleep -Milliseconds ($global:screenshoot_wait_new_window * 1000)
-                screenshot
-				
-				
-				
-			
-          } #else create new object
-        } else { #if $lastApp was defined
-        Write-Output "[$(Get-Date)] You should only see this once"
-        }
-
-        #new Process with a window
-        Write-Output "[$(Get-Date)] Start a timer"
-        $SW = [System.Diagnostics.Stopwatch]::StartNew()     
-        $start = Get-Date
-  
-        #set the last app
-        $LastApp = $app
-        #preserve process information
-        $LastProcess = $Process
-        $LastMainModule = $process.mainmodule
-
-      #clear app just in case
-      Remove-Variable app
-  }
-      $diff= (New-TimeSpan -Start $global:last_screenshot -End (Get-Date)).TotalMinutes
-      #Write-Output "[$(Get-Date)] Last sreenshoot: $diff"
-      if ($diff -gt $global:idle_screenshoot_interval) {
-         Write-Output "[$(Get-Date)] Screenshoot update $global:idle_screenshoot_interval min."
-         screenshot
-      }
-      Write-Output "[$(Get-Date)] Sleeping $global:loop_intensinty_seconds ..."
-      Start-Sleep -Milliseconds ($global:loop_intensinty_seconds * 1000)
-
-} #while
-
-#update last app
-if ($objs.WindowTitle -contains $LastApp) {
-    #update same app that was previously found
-    Write-Output "[$(Get-Date)] updating existing object"
-    Write-Output "[$(Get-Date)] SW = $($sw.elapsed)"
-    $existing = $objs | where { $_.WindowTitle -eq $LastApp } 
-    $existing.Time+= $sw.Elapsed
-
-    Write-Output "[$(Get-Date)] Total time = $($existing.time)"
-
-    #include a detail property object
-    
-    $existing.Detail += [pscustomObject]@{
-        StartTime = $start
-        EndTime = Get-Date
-        ProcessID = $lastProcess.ID
-        Process = if ($LastProcess) {$LastProcess} else {$process}
+    if (-Not ($sb -is [scriptblock])) {
+     #convert $sb to a scriptblock
+     Write-Output "Creating sb from $sb"
+     $sb = [scriptblock]::Create("$sb")
     }
-}
-else {
-    #create new object
+    #create a hashtable
+    $hash=@{}
+    #create a collection of objects
+    $objs = @()
+    New-Variable -Name LastApp -Value $Null
+    while( -Not (&$sb) ) {
+        $Process = Get-ForegroundWindowProcess
+         [string]$app = $process.MainWindowTitle
+         if ( (-Not $app) -AND $process.MainModule.Description ) {
+            #if no title but there is a description, use that
+            $app = $process.MainModule.Description
+         }
+         elseif (-Not $app) {
+            #otherwise use the module name
+            $app = $process.mainmodule.modulename
+         }
+        if ($process -AND (($Process.MainWindowHandle -ne $LastProcess.MainWindowHandle) -OR ($app -ne $lastApp )) ) {
+            Write-Output "[$(Get-Date)] NEW App changed to $app"
+             #record $last
+             if ($LastApp) {
+              if ($objs.WindowTitle -contains $LastApp) {
+                  #update same app that was previously found
+                  Write-Output "[$(Get-Date)] updating existing object $LastApp"
+                  $existing = $objs | where { $_.WindowTitle -eq $LastApp }
+                  Write-Output "[$(Get-Date)] SW = $($sw.elapsed)"
+                  $existing.Time+= $sw.Elapsed
+                  #include a detail property object
+                  $existing.Detail += [pscustomObject]@{
+                    StartTime = $start
+                    EndTime = Get-Date
+                    ProcessID = $lastProcess.ID
+                    Process = if ($LastProcess) {$LastProcess} else {$process}
+                   }
+                  Write-Output "[$(Get-Date)] Total time = $($existing.time)"
+                 } else {
+                    #create new object
+                    #include a detail property object
+                    [pscustomObject]$detail=@{
+                      StartTime = $start
+                      EndTime = Get-Date
+                      ProcessID = $lastProcess.ID
+                      Process = if ($LastProcess) {$LastProcess} else {$process}
+                    }
+                    Write-Output "[$(Get-Date)] Creating new object for $LastApp"
+                    Write-Output "[$(Get-Date)] Time = $($sw.elapsed)"
+                    $obj = New-Object -TypeName PSobject -Property @{
+                        WindowTitle = $LastApp
+                        Application = $LastMainModule.Description #$LastProcess.MainModule.Description
+                        Product = $LastMainModule.Product #$LastProcess.MainModule.Product
+                        Time = $sw.Elapsed
+                        Date = (get-date).ToString(‘yyyy-MM-dd’)
+                        Idle = $global:total_user_idle
+                        User = $env:UserName
+                        Detail = ,([pscustomObject]@{
+                         StartTime = $start
+                         EndTime = Get-Date
+                         ProcessID = $lastProcess.ID
+                         Process = if ($LastProcess) {$LastProcess} else {$process}
+                        } )
+					    StartTime = $start
+                        EndTime = Get-Date
+                        Process = if ($LastProcess) {$LastProcess} else {$process}                   
+					    }    
+                    $obj.psobject.TypeNames.Insert(0,"My.Monitored.Window")
+                    #add a custom type name
+                    #add the object to the collection
+                    $objs += $obj
+                    $obj | Select-Object -Property User, Date, StartTime, EndTime, Time, Idle, Application, WindowTitle, Product, Title, Process | Export-CSV $global:dir\Data_$env:UserName.csv -Append -NoTypeInformation -Encoding utf8
+                    Write-Output "[$(Get-Date)] Sleeping $global:screenshoot_wait_new_window s...."
+                    Start-Sleep -Milliseconds ($global:screenshoot_wait_new_window * 1000)
+                    screenshot
+                    $global:total_user_idle = 0
+                } #else create new object
+            } else { #if $lastApp was defined
+                Write-Output "[$(Get-Date)] You should only see this once"
+            }
+            #new Process with a window
+            Write-Output "[$(Get-Date)] Start a timer"
+            $SW = [System.Diagnostics.Stopwatch]::StartNew()     
+            $start = Get-Date
+            #set the last app
+            $LastApp = $app
+            #preserve process information
+            $LastProcess = $Process
+            $LastMainModule = $process.mainmodule
+          #clear app just in case
+          Remove-Variable app
+      }
 
+
+          ################################################
+          #idle calculation
+          ################################################
+
+          $Idle = [math]::Round([PInvoke.Win32.UserInput]::IdleTime.TotalMinutes,2)
+          if ($Idle -gt $global:max_idle_time){
+               $global:last_user_idle = $Idle
+               Write-Output "[$(Get-Date)] last_user_idle $global:last_user_idle ..."
+          } else {
+              if ($global:last_user_idle -gt $global:max_idle_time) {
+                $global:total_user_idle = $global:total_user_idle + $global:last_user_idle
+              }
+              $global:last_user_idle = 0
+              $diff= (New-TimeSpan -Start $global:last_screenshot -End (Get-Date)).TotalMinutes
+              #Write-Output "[$(Get-Date)] Last sreenshoot: $diff"
+              if ($diff -gt $global:idle_screenshoot_interval) {
+                 Write-Output "[$(Get-Date)] Screenshoot update $global:idle_screenshoot_interval min."
+                 screenshot
+              }        
+          }
+          Write-Output "[$(Get-Date)] IDLE: $Idle    LI: $global:last_user_idle     GI: $global:total_user_idle"
+
+
+           ###sleep script
+          Write-Output "[$(Get-Date)] Sleeping $global:loop_intensinty_seconds ..."
+          Start-Sleep -Milliseconds ($global:loop_intensinty_seconds * 1000)
+
+
+    } #while
+    #update last app
+    if ($objs.WindowTitle -contains $LastApp) {
+        #update same app that was previously found
+        Write-Output "[$(Get-Date)] updating existing object"
+        Write-Output "[$(Get-Date)] SW = $($sw.elapsed)"
+        $existing = $objs | where { $_.WindowTitle -eq $LastApp } 
+        $existing.Time+= $sw.Elapsed
+        Write-Output "[$(Get-Date)] Total time = $($existing.time)"
+        #include a detail property object
+        $existing.Detail += [pscustomObject]@{
+            StartTime = $start
+            EndTime = Get-Date
+            ProcessID = $lastProcess.ID
+            Process = if ($LastProcess) {$LastProcess} else {$process}
+        }
+    }
+                                                                                            else {
+    #create new object
     Write-Output "[$(Get-Date)] Creating new object"
     Write-Output "[$(Get-Date)] Time = $($sw.elapsed)"
 
@@ -320,25 +365,24 @@ else {
         Time = $sw.Elapsed
         Date = (get-date).ToString(‘yyyy-MM-dd’)
         User = $env:UserName
+        Idle = $global:total_user_idle
         Detail = ,([pscustomObject]@{
          StartTime = $start
          EndTime = Get-Date
          ProcessID = $lastProcess.ID
          Process = if ($LastProcess) {$LastProcess} else {$process}
          })
-        }    
-
+        }
     $obj.psobject.TypeNames.Insert(0,"My.Monitored.Window")
     #add a custom type name
 
     #add the object to the collection
     $objs += $obj
     $obj | Export-CSV $global:dir\Data_$env:UserName.csv -Append -NoTypeInformation
-} #else create new object
-
-$objs
-
-Write-Output "[$(Get-Date)] Ending $($MyInvocation.Mycommand)"  
+    $global:total_user_idle = 0
+    } #else create new object
+    $objs
+    Write-Output "[$(Get-Date)] Ending $($MyInvocation.Mycommand)"  
 } #main
 
 
