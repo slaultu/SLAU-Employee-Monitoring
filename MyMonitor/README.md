@@ -7,7 +7,7 @@ Employee monitoring software provides reports on employee productivity. Monitori
 * No More Micromanaging and Constant Supervision
 User login software can be used in windows terminal servers to monitor user activity and trublehoot loads.
 ## Installation
-copy files to c:\MyMonitor
+copy to c:\
 Run install.bat
 
 ## Usage
