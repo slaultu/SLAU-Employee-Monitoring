@@ -1,4 +1,4 @@
-# FREE Personal monitoring powershell script
+# FREE user time activity monitoring powershell script
 Comprehensive Windows user tracking functionality can capture any user activity. These can range from screen recordings, tracking emails, and all the way to Zoom sessions.
 Employee monitoring software provides reports on employee productivity. Monitoring reports show a real picture of how employees use the computer. Software records computer activities such as software use, internet use, documents use, and more
 * Increased Transparency
@@ -14,17 +14,29 @@ Run install.bat
 Check for csv files and screenshoots after reboot in script folder.
 
 ## Functions
-+ [x] Log open windows and titles
-+ [x] Autorun on user login
-+ [x] Log time on window
-+ [x] Take screenshoots on window change
+:white_check_mark: Log open windows and titles
+
+:white_check_mark: Autorun on user login
+
+:white_check_mark: Log time on window
+
+:white_check_mark: Take screenshoots on window change
+
+## In Progress
+:writing_hand: Log idle time in window
 
 ## ToDo
-- [x] Log idle time in window
-- [x] Colected data upload mechanism
-- [x] Web for uploading colected data
-- [x] Web for analysis of colected data
-- [x] Web dashboard to show calculated employee productivity level based on different metrics recorded by the software.
+:black_square_button: Alerting via SMTP (email), when malciuos activity detected. Visting bad rating websites or software.
+
+:writing_hand: Log idle time in window
+
+:black_square_button: Colected data upload mechanism
+
+:black_square_button: Web for uploading colected data
+
+:black_square_button: Web for analysis of colected data
+
+:black_square_button: Web dashboard to show calculated employee productivity level based on different metrics recorded by the software.
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
