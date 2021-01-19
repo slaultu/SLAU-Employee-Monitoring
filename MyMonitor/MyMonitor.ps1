@@ -23,6 +23,9 @@ $global:idle_screenshoot_interval = 5 #minutes
 $global:loop_intensinty_seconds = 10 #seconds. Decreing will react more quicker to windows change but increase CPU usage.
 $global:screenshoot_wait_new_window = 5 #seconds. How many seconds wait before screenshot after windows change.
 $global:max_idle_time = 10 #max time (seconds) user can be in idel to start counting as inactive/unproductive time
+$global:log_file = $global:dir+'\Data.csv' #file where data will be saved. Single file version
+#$global:log_file = $global:dir\Data_$env:UserName.csv #file where data will be saved. Multifile version
+
 
 [Reflection.Assembly]::LoadWithPartialName("System.Drawing")
 [void] [System.Reflection.Assembly]::LoadWithPartialName("System.Drawing") 
@@ -260,7 +263,7 @@ $main = {
         
         
         
-        if ($process -AND (($Process.MainWindowHandle -ne $LastProcess.MainWindowHandle) -OR ($app -ne $lastApp )) ) {
+        if ($global:last_user_idle -eq 0 -AND $process -AND (($Process.MainWindowHandle -ne $LastProcess.MainWindowHandle) -OR ($app -ne $lastApp )) ) {
             Write-Output "[$(Get-Date)] NEW App changed to $app"
              #record $last
              if ($LastApp) {
@@ -272,15 +275,16 @@ $main = {
                       ProcessID = $lastProcess.ID
                       Process = if ($LastProcess) {$LastProcess} else {$process}
                     }
-                    Write-Output "[$(Get-Date)] 1111 Creating new object for $LastApp"
+                    Write-Output "[$(Get-Date)] Creating new object for $LastApp"
                     Write-Output "[$(Get-Date)] Time = $([math]::Round($sw.ElapsedMilliseconds/1000))"
                     $obj = New-Object -TypeName PSobject -Property @{
                         WindowTitle = $LastApp
+                        Date = (get-date).ToString(‘yyyy-MM-dd’)
                         Application = $LastMainModule.Description #$LastProcess.MainModule.Description
                         Product = $LastMainModule.Product #$LastProcess.MainModule.Product
-                        Time = [math]::Round($sw.ElapsedMilliseconds/1000)
-                        Date = (get-date).ToString(‘yyyy-MM-dd’)
-                        Idle = [math]::Round($global:total_user_idle)
+                        Time = [math]::Round($sw.ElapsedMilliseconds/1000/3600,5)
+                        Idle = [math]::Round($global:total_user_idle/3600,5)
+                        Work = [math]::Round((($sw.ElapsedMilliseconds/1000/3600) - ($global:total_user_idle/3600)),5)
                         User = $env:UserName
                         Detail = ,([pscustomObject]@{
                          StartTime = $start
@@ -296,7 +300,7 @@ $main = {
                     #add a custom type name
                     #add the object to the collection
                     $objs += $obj
-                    $obj | Select-Object -Property User, Date, StartTime, EndTime, Time, Idle, Application, WindowTitle, Product, Title, Process | Export-CSV $global:dir\Data_$env:UserName.csv -Append -NoTypeInformation -Encoding utf8
+                    $obj | Select-Object -Property User, Date, StartTime, EndTime, Time, Idle, Work, Application, WindowTitle, Product, Title, Process | Export-CSV $global:log_file -Append -NoTypeInformation -Encoding utf8
                     $global:total_user_idle = 0
                     Write-Output "[$(Get-Date)] Sleeping $global:screenshoot_wait_new_window s...."
                     Start-Sleep -Milliseconds ($global:screenshoot_wait_new_window * 1000)
@@ -329,7 +333,7 @@ $main = {
 
     } #while
     #create new object
-    Write-Output "[$(Get-Date)] 2222 Creating new object 2222"
+    Write-Output "[$(Get-Date)] Creating new object"
     #Write-Output "[$(Get-Date)] Time = $([math]::Round($sw.ElapsedMilliseconds/1000))"
 
     $obj = New-Object -TypeName PSobject -Property @{
@@ -352,7 +356,7 @@ $main = {
     #add a custom type name
     #add the object to the collection
     $objs += $obj
-    $obj | Export-CSV $global:dir\Data_$env:UserName.csv -Append -NoTypeInformation
+    $obj | Export-CSV $global:log_file -Append -NoTypeInformation
     $global:total_user_idle = 0
     #} #else create new object
     $objs
